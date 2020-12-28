@@ -1,17 +1,36 @@
 public class NetworkTask {
-    int Sender;
     int Receiver;
     int GenerationFrame;
-    int FinishFrame;
-    int ID;
+    int Connection;
     int Priority;
+    int FinishFrame;
 
-    NetworkTask(int sender, int receiver, int generationFrame, int id, int priority) {
-        Sender = sender;
+    NetworkTask(int receiver, int generationFrame, int connection, int priority) {
         Receiver = receiver;
         GenerationFrame = generationFrame;
-        FinishFrame = -1;
-        ID = id;
+        Connection = connection;
         Priority = priority;
+    }
+
+    NetworkTask(String task) {
+        String[] parts = task.split("_");
+        Priority = Integer.parseInt(parts[0]);
+        Connection = Integer.parseInt(parts[1]);
+        Receiver = Integer.parseInt(parts[2]);
+        GenerationFrame = Integer.parseInt(parts[3]);
+    }
+
+    String asString() {
+        return Priority + "_" + Connection + "_" + Receiver + "_" + GenerationFrame;
+    }
+
+    void finishTask(int frame) {
+        FinishFrame = frame;
+        for (NetworkConnection connection : Synchronizer.Connections) {
+            if (connection.ID == Connection) {
+                connection.finishTask(this);
+                return;
+            }
+        }
     }
 }

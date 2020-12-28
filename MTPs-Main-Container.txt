@@ -1,1 +1,1 @@
-http://YOGA:7778/acc
+http://YOGA.mshome.net:7778/acc

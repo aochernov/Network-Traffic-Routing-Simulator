@@ -1,226 +1,171 @@
+import jade.core.AID;
+import jade.core.Agent;
+import jade.lang.acl.ACLMessage;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
-public class NetworkNode {
-    class RoutingInfo {
-        int Sender;
-        int Receiver;
-        int WaitingTasks;
-        int RoutedTasks;
-        ArrayList<Integer> Routers;
-        ArrayList<Integer> Routed;
-        ArrayList<Integer> Sent;
+public class NetworkNode extends Agent {
+    static Object Lock = new Object();
+    ArrayList<Integer> Neighbours;
+    ArrayList<ArrayList<Integer>> Routers;
+    ArrayList<ArrayList<NetworkTask>> Tasks;
 
-        RoutingInfo(int sender, int receiver) {
-            Sender = sender;
-            Receiver = receiver;
-            WaitingTasks = 0;
-            RoutedTasks = 0;
-            Routers = new ArrayList<>();
-            Routed = new ArrayList<>();
-            Sent = new ArrayList<>();
+    @Override
+    protected  void setup() {
+        Object args[] = getArguments();
+        Tasks = new ArrayList<>();
+        for (int i = 0; i < Synchronizer.Priorities.size(); i++) {
+            Tasks.add(new ArrayList<>());
         }
-    }
-
-    static float Gamma = 0.6f;
-    int Name;
-    ArrayList<ArrayList<Integer>> Routing;
-    Map<Integer, NetworkLink> Links;
-    ArrayList<NetworkConnection> ReceivingConnections;
-    ArrayList<NetworkTask> WaitingTasks;
-    ArrayList<RoutingInfo> RoutingInfos;
-
-    NetworkNode(NetworkController.NodeInfo node) {
-        Name = node.Name;
-        Routing = node.Routing;
-        Links = new HashMap<>();
-        ReceivingConnections = new ArrayList<>();
-        WaitingTasks = new ArrayList<>();
-        RoutingInfos = new ArrayList<>();
-    }
-
-    void BindLink(NetworkLink link, int destination) {
-        Links.put(destination, link);
-    }
-
-    void AddReceivingConnection(NetworkConnection con) {
-        ReceivingConnections.add(con);
-    }
-
-    int GetRoutingInfo(int from, int to) {
-        int i = 0;
-        for (RoutingInfo info : RoutingInfos) {
-            if ((info.Sender == from) && (info.Receiver == to)) {
-                return i;
+        Neighbours = (ArrayList<Integer>) args[0];
+        Routers = (ArrayList<ArrayList<Integer>>)args[1];
+        synchronized (Lock) {
+            int name = Integer.parseInt(getLocalName());
+            for (NetworkConnection connection : Synchronizer.Connections) {
+                if (name == connection.Sender) {
+                    connection.register(this, true);
+                }
+                else if (name == connection.Receiver) {
+                    connection.register(this, false);
+                }
             }
-            i++;
         }
-        RoutingInfos.add(new RoutingInfo(from, to));
-        return i;
+        addBehaviour(new NetworkNodeBehaviour(this, TimeUnit.MILLISECONDS.toMillis(10)));
+        finishFrame();
     }
 
-    void CheckRouting() {
-        for (NetworkTask task : WaitingTasks) {
-            RoutingInfos.get(GetRoutingInfo(task.Sender, task.Receiver)).WaitingTasks++;
+    void finishFrame() {
+        AID receiver = new AID("sync", AID.ISLOCALNAME);
+        ACLMessage message = new ACLMessage(Synchronizer.AGENT_TO_SYNC);
+        message.addReceiver(receiver);
+        send(message);
+    }
+
+    void getNewTasks(ArrayList<NetworkTask> tasks) {
+        for (NetworkTask task : tasks) {
+            Tasks.get(task.Priority - 1).add(task);
         }
-        boolean needRerouting = false;
-        for (RoutingInfo info : RoutingInfos) {
-            if ((info.WaitingTasks != info.RoutedTasks)) {
-                needRerouting = true;
+    }
+
+    int chooseRouter(int to) {
+        return Routers.get(to).get(0);
+    }
+
+    ArrayList<ArrayList<ArrayList<NetworkTask>>> prepareTransmission() {
+        ArrayList<ArrayList<ArrayList<NetworkTask>>> tasksByRouter = new ArrayList<>();
+        for (int i = 0; i < Neighbours.size(); i++) {
+            ArrayList<ArrayList<NetworkTask>> List = new ArrayList<>();
+            for (int j = 0; j < Tasks.size(); j++) {
+                List.add(new ArrayList<>());
+            }
+            tasksByRouter.add(List);
+        }
+        for (int p = 0; p < Tasks.size(); p++) {
+            for (int t = 0; t < Tasks.get(p).size(); t++) {
+                NetworkTask task = Tasks.get(p).get(t);
+                if (task.Receiver == Integer.parseInt(getLocalName())) {
+                    task.finishTask(Synchronizer.Frame);
+                    Tasks.get(p).remove(task);
+                    t--;
+                    continue;
+                }
+                int router = chooseRouter(task.Receiver);
+                int idx = 1;
+                for (int j = 0; j < Neighbours.size(); j++) {
+                    if (router == Neighbours.get(j)) {
+                        idx = j;
+                        break;
+                    }
+                }
+                tasksByRouter.get(idx).get(task.Priority - 1).add(task);
+            }
+        }
+        return  tasksByRouter;
+    }
+
+    boolean listAnd(ArrayList<Boolean> list) {
+        for (boolean l : list) {
+            if (!l) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    void transmitTasks(ArrayList<ArrayList<ArrayList<NetworkTask>>> tasksByRouter) {
+        for (int r = 0; r < tasksByRouter.size(); r++) {
+            int router = Neighbours.get(r);
+            NetworkLink link = getLink(router);
+            ArrayList<ArrayList<NetworkTask>> tasks = tasksByRouter.get(r);
+            ArrayList<Boolean> isTransmitted = new ArrayList<>(Collections.nCopies(tasks.size(), false));
+            while(!listAnd(isTransmitted)) {
+                for (int p = 0; p < tasks.size(); p++) {
+                    if (isTransmitted.get(p)) {
+                        continue;
+                    }
+                    int numOfTasks = Synchronizer.Priorities.get(p);
+                    for (int t = 0; t < tasks.get(p).size(); t++) {
+                        NetworkTask task = tasks.get(p).get(t);
+                        tasks.get(p).remove(task);
+                        if (link.canSend()) {
+                            ACLMessage message = new ACLMessage(Synchronizer.TRANSMIT_TASK);
+                            AID receiver = new AID(Integer.toString(router), AID.ISLOCALNAME);
+                            message.addReceiver(receiver);
+                            message.setContent(task.asString());
+                            send(message);
+                            Tasks.get(p).remove(task);
+                            t--;
+                            numOfTasks--;
+                            if (numOfTasks == 0) {
+                                break;
+                            }
+                        } else {
+                            isTransmitted.set(p, true);
+                        }
+                    }
+                    if (tasks.get(p).size() == 0) {
+                        isTransmitted.set(p, true);
+                    }
+                }
+            }
+        }
+    }
+
+    void nextFrame() {
+        schedule();
+        transmitTasks(prepareTransmission());
+        finishFrame();
+    }
+
+    NetworkLink getLink(int router) {
+        int self = Integer.parseInt(getLocalName());
+        for (NetworkLink link : Synchronizer.Links) {
+            if (((link.Nodes.get(0) == self) && (link.Nodes.get(1) == router)) ||
+            ((link.Nodes.get(1) == self) && (link.Nodes.get(0) == router))) {
+                return link;
+            }
+        }
+        return null;
+    }
+
+    void receiveMessage(ACLMessage message) {
+        switch (message.getPerformative()) {
+            case Synchronizer.TRANSMIT_TASK: {
+                NetworkTask receivedTask = new NetworkTask(message.getContent());
+                Tasks.get(receivedTask.Priority - 1).add(receivedTask);
+                break;
+            }
+            case Synchronizer.FINISH_WORK: {
+                ACLMessage reply = message.createReply();
+                reply.setPerformative(Synchronizer.FINISH_WORK);
+                send(reply);
+                this.doDelete();
                 break;
             }
         }
-        if (needRerouting) {
-            Route();
-        }
     }
 
-    int CalculateRemainingThroughput(int destination) {
-        if (destination == Name) {
-            return 0;
-        }
-        int value = 0;
-        for (int node : Routing.get(destination)) {
-            value += Links.get(node).GetRemainingThroughput();
-            value += Math.min(Links.get(node).GetRemainingThroughput(), (Links.get(node).GetNode(Name)).CalculateRemainingThroughput(destination));
-        }
-        return value;
-    }
-
-    void Route() {
-        for (RoutingInfo info : RoutingInfos) {
-            info.RoutedTasks = info.WaitingTasks;
-            info.Routers.clear();
-            info.Sent.clear();
-            info.Routed.clear();
-        }
-        /*//First chosen path
-        for (RoutingInfo info : RoutingInfos) {
-            int router = Routing.get(info.Receiver).get(0);
-            info.Routers.add(router);
-            info.Routed.add(info.WaitingTasks);
-            info.Sent.add(0);
-        }*/
-        /*//Random path
-        for (RoutingInfo info : RoutingInfos) {
-            for (Integer r : Routing.get(info.Receiver)) {
-                info.Routers.add(r);
-                info.Sent.add(0);
-                info.Routed.add(0);
-            }
-            Random rand = new Random();
-            int num = info.Routed.size();
-            for (int i = 0; i < info.WaitingTasks; i++) {
-                int chosen = rand.nextInt(num);
-                info.Routed.set(chosen, info.Routed.get(chosen) + 1);
-            }
-        }*/
-        /*//Round-Robin
-        for (RoutingInfo info : RoutingInfos) {
-            for (Integer r : Routing.get(info.Receiver)) {
-                info.Routers.add(r);
-                info.Sent.add(0);
-                info.Routed.add(0);
-            }
-            int num = info.Routed.size();
-            for (int i = 0; i < info.WaitingTasks; i++) {
-                int chosen = i % num;
-                info.Routed.set(chosen, info.Routed.get(chosen) + 1);
-            }
-        }*/
-        //Local Voting
-        for (NetworkLink link : Links.values()) {
-            link.UnUseThroughput(Name);
-        }
-        for (RoutingInfo info : RoutingInfos) {
-            for (Integer r : Routing.get(info.Receiver)) {
-                info.Routers.add(r);
-                info.Sent.add(0);
-                info.Routed.add(0);
-            }
-            info.Routed.set(0, info.WaitingTasks);
-            Links.get(info.Routers.get(0)).AddUsedThroughput(Name, info.WaitingTasks);
-            boolean continueVoting = true;
-            int step = 0;
-            while (continueVoting && (step < 25)) {
-                Map<Integer, Integer> remThr = new HashMap<>();
-                int sum = 0;
-                for (Integer node : info.Routers) {
-                    int value = Math.min(Links.get(node).GetRemainingThroughput(), Links.get(node).GetNode(Name).CalculateRemainingThroughput(info.Receiver));
-                    sum += value;
-                    remThr.put(node, value);
-                }
-                Map<Integer, Integer> control = new HashMap<>();
-                for (Integer node : remThr.keySet()) {
-                    int controlValue = Math.round(Gamma * (remThr.size() * remThr.get(node) - sum));
-                    control.put(node, controlValue);
-                }
-                continueVoting = false;
-                for (Integer node : control.keySet()) {
-                    int value = control.get(node);
-                    if (value < 0) {
-                        for (Integer node_ : control.keySet()) {
-                            int value_ = control.get(node_);
-                            if (value_ > 0) {
-                                int index = info.Routers.indexOf(node);
-                                int index_ = info.Routers.indexOf(node_);
-                                int change = Math.min(value_, -value);
-                                if (change > 0) {
-                                    continueVoting = true;
-                                    info.Routed.set(index, info.Routed.get(index) - change);
-                                    info.Routed.set(index_, info.Routed.get(index_) + change);
-                                    value += change;
-                                    Links.get(node).AddUsedThroughput(Name, -change);
-                                    Links.get(node_).AddUsedThroughput(Name, change);
-                                }
-                                if (value == 0) {
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-                step++;
-            }
-        }
-    }
-
-    void SendTasks() {
-        CheckRouting();
-        for (NetworkTask task : WaitingTasks) {
-            RoutingInfo info = RoutingInfos.get(GetRoutingInfo(task.Sender, task.Receiver));
-            int j = 0;
-            while (true) {
-                if (info.Sent.get(j) < info.Routed.get(j)) {
-                    info.Sent.set(j, info.Sent.get(j) + 1);
-                    int router = info.Routers.get(j);
-                    Links.get(router).AddToQueue(router, task);
-                    break;
-                }
-                j++;
-            }
-        }
-        for (RoutingInfo info : RoutingInfos) {
-            info.WaitingTasks = 0;
-            for (int i = 0; i < info.Sent.size(); i++) {
-                info.Sent.set(i, 0);
-            }
-        }
-        WaitingTasks.clear();
-    }
-
-    void ReceiveTasks(ArrayList<NetworkTask> tasks) {
-        for (NetworkTask task : tasks) {
-            int receiver = task.Receiver;
-            if (receiver == Name) {
-                for (NetworkConnection con : ReceivingConnections) {
-                    if (con.ID == task.ID) {
-                        con.ReceivedTasks.add(task);
-                    }
-                }
-            }
-            else {
-                WaitingTasks.add(task);
-            }
-        }
+    void schedule() {
+        return;
     }
 }

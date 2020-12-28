@@ -1,62 +1,76 @@
 import java.util.ArrayList;
 
 public class NetworkConnection {
-    static int ConnectionID = 0;
+    static int nextID;
+    static boolean IsFinished;
     int ID;
     int Sender;
     int Receiver;
     int Tasks;
+    int RemainingTasks;
     int TaskArrivalRate;
     int TaskArrivalSize;
     int StartFrame;
     int FinishFrame;
     int Priority;
+    ArrayList<NetworkTask> FinishedTasks;
     NetworkNode SenderNode;
-    ArrayList<NetworkTask> ReceivedTasks;
-    int ExpectedTasks;
+    NetworkNode ReceiverNode;
+    Object Lock = new Object();
 
-    NetworkConnection(NetworkController.ConnectionInfo con, ArrayList<NetworkNode> nodes) {
+    NetworkConnection(NetworkController.ConnectionInfo con) {
+        synchronized (Lock) {
+            ID = nextID;
+            nextID++;
+        }
         Priority = con.Priority;
-        ID = ConnectionID;
-        ConnectionID++;
         Sender = con.Sender;
         Receiver = con.Receiver;
         Tasks = con.Tasks;
-        ExpectedTasks = Tasks;
+        RemainingTasks = Tasks;
         FinishFrame = -1;
-        ReceivedTasks = new ArrayList<>();
+        FinishedTasks = new ArrayList<>();
         TaskArrivalRate = con.TaskArrivalRate;
         TaskArrivalSize = con.TaskArrivalSize;
         StartFrame = con.StartFrame;
-        for (NetworkNode node : nodes) {
-            if (Sender == node.Name) {
-                SenderNode = node;
-            }
-            else if (Receiver == node.Name) {
-                node.AddReceivingConnection(this);
-            }
+    }
+
+    void register(NetworkNode node, boolean isSender) {
+        if (isSender) {
+            SenderNode = node;
+            generateTasks();
+        }
+        else {
+            ReceiverNode = node;
         }
     }
 
-    void GenerateTasks(int frame) {
-        if ((frame < StartFrame) || (((frame - StartFrame) % TaskArrivalRate) != 0) || (Tasks == 0)) {
-            return;
-        }
-        ArrayList<NetworkTask> tasks = new ArrayList<>();
-        int taskNum = Math.min(Tasks, TaskArrivalSize);
-        for (int i = 0; i < taskNum; i++) {
-            tasks.add(new NetworkTask(Sender, Receiver, frame, ID, Priority));
-        }
-        Tasks -= taskNum;
-        SenderNode.ReceiveTasks(tasks);
+    void nextFrame() {
+        generateTasks();
     }
 
-    boolean CheckConnectionEnd(int frame) {
-        for (NetworkTask task : ReceivedTasks) {
-            if (task.FinishFrame == -1) {
-                task.FinishFrame = frame;
+    void generateTasks() {
+        if ((RemainingTasks > 0) && (Synchronizer.Frame >= StartFrame) && ((Synchronizer.Frame - StartFrame) % TaskArrivalRate == 0)) {
+            ArrayList<NetworkTask> newTasks = new ArrayList<>();
+            int numOfTasks = Math.min(RemainingTasks, TaskArrivalSize);
+            for (int i = 0; i < numOfTasks; i++) {
+                newTasks.add(new NetworkTask(Receiver, Synchronizer.Frame, ID, Priority));
+            }
+            SenderNode.getNewTasks(newTasks);
+            RemainingTasks -= numOfTasks;
+        }
+    }
+
+    void finishTask(NetworkTask task) {
+        FinishedTasks.add(task);
+        if (FinishedTasks.size() == Tasks) {
+            FinishFrame = Synchronizer.Frame;
+            synchronized (Lock) {
+                nextID--;
+                if (nextID == 0) {
+                    IsFinished = true;
+                }
             }
         }
-        return (ExpectedTasks == ReceivedTasks.size());
     }
 }

@@ -1,76 +1,95 @@
 {
-	"Nodes": 16,
-	"Priorities": [6, 4],
+	"Algorithm": "LVP",
+	"Nodes": 8,
+	"Priorities": [9, 6],
 	"Connections": [
 		{
-			"Sender": 0,
-			"Receiver": 10,
-			"Tasks": 80,
+			"Sender": 1,
+			"Receiver": 6,
+			"Tasks": 360,
 			"TaskArrivalRate": 1,
-			"TaskArrivalSize": 8,
+			"TaskArrivalSize": 12,
 			"StartFrame": 1,
 			"Priority": 1
 		},
 		{
-			"Sender": 2,
-			"Receiver": 3,
-			"Tasks": 90,
-			"TaskArrivalRate": 1,
-			"TaskArrivalSize": 9,
-			"StartFrame": 1,
-			"Priority": 1
-		},
-		{
-			"Sender": 15,
+			"Sender": 7,
 			"Receiver": 0,
-			"Tasks": 70,
+			"Tasks": 210,
 			"TaskArrivalRate": 1,
 			"TaskArrivalSize": 7,
 			"StartFrame": 1,
 			"Priority": 1
 		},
 		{
-			"Sender": 9,
+			"Sender": 3,
 			"Receiver": 2,
-			"Tasks": 100,
+			"Tasks": 150,
 			"TaskArrivalRate": 1,
-			"TaskArrivalSize": 10,
+			"TaskArrivalSize": 5,
 			"StartFrame": 1,
-			"Priority": 2
+			"Priority": 1
 		},
 		{
-			"Sender": 6,
-			"Receiver": 12,
-			"Tasks": 80,
+			"Sender": 1,
+			"Receiver": 4,
+			"Tasks": 240,
 			"TaskArrivalRate": 1,
 			"TaskArrivalSize": 8,
 			"StartFrame": 1,
 			"Priority": 2
 		},
 		{
-			"Sender": 4,
+			"Sender": 7,
+			"Receiver": 1,
+			"Tasks": 360,
+			"TaskArrivalRate": 1,
+			"TaskArrivalSize": 12,
+			"StartFrame": 1,
+			"Priority": 2
+		},
+		{
+			"Sender": 2,
 			"Receiver": 7,
-			"Tasks": 80,
+			"Tasks": 480,
 			"TaskArrivalRate": 1,
-			"TaskArrivalSize": 8,
+			"TaskArrivalSize": 16,
 			"StartFrame": 1,
 			"Priority": 2
 		},
 		{
-			"Sender": 0,
-			"Receiver": 12,
-			"Tasks": 60,
+			"Sender": 7,
+			"Receiver": 3,
+			"Tasks": 180,
 			"TaskArrivalRate": 1,
 			"TaskArrivalSize": 6,
 			"StartFrame": 1,
 			"Priority": 2
 		},
 		{
-			"Sender": 14,
-			"Receiver": 13,
-			"Tasks": 70,
+			"Sender": 0,
+			"Receiver": 5,
+			"Tasks": 150,
 			"TaskArrivalRate": 1,
-			"TaskArrivalSize": 7,
+			"TaskArrivalSize": 5,
+			"StartFrame": 1,
+			"Priority": 2
+		},
+		{
+			"Sender": 4,
+			"Receiver": 3,
+			"Tasks": 300,
+			"TaskArrivalRate": 1,
+			"TaskArrivalSize": 10,
+			"StartFrame": 1,
+			"Priority": 2
+		},
+		{
+			"Sender": 7,
+			"Receiver": 0,
+			"Tasks": 270,
+			"TaskArrivalRate": 1,
+			"TaskArrivalSize": 9,
 			"StartFrame": 1,
 			"Priority": 2
 		}
@@ -81,19 +100,23 @@
 			"Throughput": 10
 		},
 		{
-			"Nodes":  [1, 2],
+			"Nodes":  [0, 2],
+			"Throughput": 20
+		},
+		{
+			"Nodes":  [0, 3],
 			"Throughput": 10
 		},
 		{
-			"Nodes":  [2, 3],
-			"Throughput": 10
-		},
-		{
-			"Nodes":  [0, 4],
+			"Nodes":  [1, 4],
 			"Throughput": 10
 		},
 		{
 			"Nodes":  [1, 5],
+			"Throughput": 20
+		},
+		{
+			"Nodes":  [2, 5],
 			"Throughput": 10
 		},
 		{
@@ -101,76 +124,20 @@
 			"Throughput": 10
 		},
 		{
-			"Nodes":  [3, 7],
+			"Nodes":  [3, 6],
 			"Throughput": 10
 		},
 		{
-			"Nodes":  [4, 5],
+			"Nodes":  [4, 7],
 			"Throughput": 10
 		},
 		{
-			"Nodes":  [5, 6],
+			"Nodes":  [5, 7],
 			"Throughput": 10
 		},
 		{
 			"Nodes":  [6, 7],
-			"Throughput": 10
-		},
-		{
-			"Nodes":  [4, 8],
-			"Throughput": 10
-		},
-		{
-			"Nodes":  [5, 9],
-			"Throughput": 10
-		},
-		{
-			"Nodes":  [6, 10],
-			"Throughput": 10
-		},
-		{
-			"Nodes":  [7, 11],
-			"Throughput": 10
-		},
-		{
-			"Nodes":  [8, 9],
-			"Throughput": 10
-		},
-		{
-			"Nodes":  [9, 10],
-			"Throughput": 10
-		},
-		{
-			"Nodes":  [10, 11],
-			"Throughput": 10
-		},
-		{
-			"Nodes":  [8, 12],
-			"Throughput": 10
-		},
-		{
-			"Nodes":  [9, 13],
-			"Throughput": 10
-		},
-		{
-			"Nodes":  [10, 14],
-			"Throughput": 10
-		},
-		{
-			"Nodes":  [11, 15],
-			"Throughput": 10
-		},
-		{
-			"Nodes":  [12, 13],
-			"Throughput": 10
-		},
-		{
-			"Nodes":  [13, 14],
-			"Throughput": 10
-		},
-		{
-			"Nodes":  [14, 15],
-			"Throughput": 10
+			"Throughput": 20
 		}
 	]
 }

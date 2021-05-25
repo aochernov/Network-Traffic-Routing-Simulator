@@ -6,10 +6,14 @@ import java.util.HashSet;
 import java.util.concurrent.TimeUnit;
 
 public class Synchronizer extends Agent {
+    enum AlgorithmType {ECMP, RPS, DRILL, CLOVE, DeTail, LVP}
+
     static ArrayList<NetworkConnection> Connections = new ArrayList<>();
     static ArrayList<NetworkLink> Links = new ArrayList<>();
     static ArrayList<Integer> Priorities = new ArrayList<>();
+    static int PrioritySum;
     static int Frame;
+    static AlgorithmType Algorithm;
     HashSet<Integer> SyncAgents = new HashSet<>();
     int NumOfAgents;
 
@@ -20,7 +24,7 @@ public class Synchronizer extends Agent {
 
     @Override
     protected  void setup() {
-        Object args[] = getArguments();
+        Object[] args = getArguments();
         NumOfAgents = (Integer)args[0];
         addBehaviour(new SynchronizerBehaviour(this, TimeUnit.MILLISECONDS.toMillis(10)));
     }
@@ -32,6 +36,7 @@ public class Synchronizer extends Agent {
         }
         SyncAgents.clear();
         Frame++;
+        System.out.println("Frame: " + Frame);
         for (NetworkConnection connection : Connections) {
             connection.nextFrame();
         }

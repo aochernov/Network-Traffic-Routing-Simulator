@@ -1,38 +1,31 @@
 import com.google.gson.Gson;
 import jade.core.Profile;
 import jade.core.ProfileImpl;
-import jade.core.Runtime;
 import jade.wrapper.AgentController;
 import jade.wrapper.ContainerController;
+
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
 
 public class NetworkController {
-    private static int algorithm;
     private static NetworkInfo Settings;
-    private Runtime runtime;
-    private ContainerController container;
     private ArrayList<NetworkConnection> FinishedConnections;
     private boolean IsFinished;
-    final static int FIRST_PATH = 0;
-    final static int RANDOM = 1;
-    final static int ROUND_ROBIN = 2;
-    final static int LOCAL_VOTING = 3;
 
-    NetworkController(int a, String filename) {
-        algorithm = a;
+    NetworkController(String filename) {
         FinishedConnections = new ArrayList<>();
         IsFinished = false;
         try {
             Settings = (new Gson()).fromJson(new BufferedReader(new FileReader(filename)), NetworkInfo.class);
             Settings.findNeighbours();
             Settings.calculatePaths();
-        } catch (FileNotFoundException e) {}
+        } catch (FileNotFoundException ignored) {}
     }
 
-    public class ConnectionInfo {
+    public static class ConnectionInfo {
         int Sender;
         int Receiver;
         int Tasks;
@@ -42,12 +35,13 @@ public class NetworkController {
         int Priority;
     }
 
-    public class LinkInfo {
+    public static class LinkInfo {
         ArrayList<Integer> Nodes;
         int Throughput;
     }
 
-    public class NetworkInfo {
+    public static class NetworkInfo {
+        String Algorithm;
         ArrayList<LinkInfo> Links;
         ArrayList<ConnectionInfo> Connections;
         int Nodes;
@@ -111,10 +105,20 @@ public class NetworkController {
     void run() {
         NetworkConnection.nextID = 0;
         NetworkConnection.IsFinished = false;
+        switch (Settings.Algorithm) {
+            case "RPS" -> Synchronizer.Algorithm = Synchronizer.AlgorithmType.RPS;
+            case "DRILL" -> Synchronizer.Algorithm = Synchronizer.AlgorithmType.DRILL;
+            case "CLOVE" -> Synchronizer.Algorithm = Synchronizer.AlgorithmType.CLOVE;
+            case "DETAIL", "DeTail" -> Synchronizer.Algorithm = Synchronizer.AlgorithmType.DeTail;
+            case "LVP" -> Synchronizer.Algorithm = Synchronizer.AlgorithmType.LVP;
+            default -> Synchronizer.Algorithm = Synchronizer.AlgorithmType.ECMP;
+        }
         Synchronizer.Frame = 0;
+        Synchronizer.PrioritySum = 0;
         Synchronizer.Priorities.clear();
-        for (int priorityWeight : Settings.Priorities) {
-            Synchronizer.Priorities.add(priorityWeight);
+        for (int priority : Settings.Priorities) {
+            Synchronizer.Priorities.add(priority);
+            Synchronizer.PrioritySum += priority;
         }
         Synchronizer.Connections.clear();
         for (ConnectionInfo connection : Settings.Connections) {
@@ -124,41 +128,20 @@ public class NetworkController {
         for (LinkInfo link : Settings.Links) {
             Synchronizer.Links.add(new NetworkLink(link));
         }
-        runtime = Runtime.instance();
+        jade.core.Runtime runtime = jade.core.Runtime.instance();
         Profile profile = new ProfileImpl();
         profile.setParameter(Profile.MAIN_HOST, "localhost");
         profile.setParameter(Profile.MAIN_PORT, "10098");
         profile.setParameter(Profile.GUI, "false");
-        container = runtime.createMainContainer(profile);
+        ContainerController container = runtime.createMainContainer(profile);
         try {
-            Object args[] = {Settings.Nodes};
+            Object[] args = {Settings.Nodes};
             AgentController sync = container.createNewAgent("sync", "Synchronizer", args);
             sync.start();
             for (int i = 0; i < Settings.Nodes; i++) {
-                Object arguments[] = {Settings.Neighbours.get(i), Settings.Routers.get(i)};
-                switch (algorithm) {
-                    case FIRST_PATH: {
-                        AgentController agent = container.createNewAgent(Integer.toString(i), "NetworkNode", arguments);
-                        agent.start();
-                        break;
-                    }
-                    case RANDOM: {
-                        AgentController agent = container.createNewAgent(Integer.toString(i), "RandomNode", arguments);
-                        agent.start();
-                        break;
-                    }
-                    case ROUND_ROBIN: {
-                        AgentController agent = container.createNewAgent(Integer.toString(i), "RoundRobinNode", arguments);
-                        agent.start();
-                        break;
-                    }
-                    case LOCAL_VOTING: {
-
-                        AgentController agent = container.createNewAgent(Integer.toString(i), "LocalVotingNode", arguments);
-                        agent.start();
-                        break;
-                    }
-                }
+                Object[] arguments = {Settings.Neighbours.get(i), Settings.Routers.get(i)};
+                AgentController agent = container.createNewAgent(Integer.toString(i), "NetworkNode", arguments);
+                agent.start();
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -184,8 +167,18 @@ public class NetworkController {
         IsFinished = true;
     }
 
-    ArrayList<ArrayList<Float>> getResults() {
-        ArrayList<ArrayList<Float>> results = new ArrayList<>();
+    void getResults() {
+        System.out.println();
+        System.out.println("***");
+        switch (Synchronizer.Algorithm) {
+            case ECMP -> System.out.println("ECMP");
+            case RPS -> System.out.println("RPS");
+            case DRILL -> System.out.println("DRILL");
+            case CLOVE -> System.out.println("CLOVE");
+            case DeTail -> System.out.println("DeTail");
+            case LVP -> System.out.println("LVP");
+        }
+        System.out.println("***");
         for (int p = 1; p <= Settings.Priorities.size(); p++) {
             float deliveryMin = Float.MAX_VALUE, deliveryMax = Float.MIN_VALUE, deliveryAvg = 0.0f, deliveryFairness = 0.0f;
             float delayMin = Float.MAX_VALUE, delayMax = Float.MIN_VALUE, delayAvg = 0.0f, delayFairness = 0.0f;
@@ -204,7 +197,7 @@ public class NetworkController {
                 deliveryFairness += (delivery * delivery);
                 //Delay
                 float delay = 0.0f;
-                for (NetworkTask task : connection.FinishedTasks) {
+                for (NetworkPacket task : connection.FinishedTasks) {
                     float taskDelay = task.FinishFrame - task.GenerationFrame;
                     delay += taskDelay;
                 }
@@ -219,6 +212,8 @@ public class NetworkController {
                 throughputMin = Math.min(throughput, throughputMin);
                 throughputMax = Math.max(throughput, throughputMax);
                 throughputFairness += (throughput * throughput);
+                //System.out.println(connection.Sender + " --> " + connection.Receiver + "; Priority = " + connection.Priority);
+                //System.out.println("Delivery: " + delivery + ", Delay: " + delay + ", Throughput: " + throughput);
             }
             deliveryAvg /= num;
             delayAvg /= num;
@@ -227,33 +222,40 @@ public class NetworkController {
             delayFairness = (delayAvg * delayAvg) / (delayFairness / num);
             throughputFairness = (throughputAvg * throughputAvg) / (throughputFairness / num);
 
-            ArrayList<Float> res = new ArrayList<>(Arrays.asList(deliveryAvg, deliveryMax, deliveryMin, deliveryFairness,
-                    delayAvg, delayMax, delayMin, delayFairness, throughputAvg, throughputMax, throughputMin, throughputFairness));
-            results.add(res);
-
             //Print
             System.out.println("Priority " + p);
             System.out.println("###");
-            System.out.println("Delivery Time:");
-            System.out.println("Average: " + deliveryAvg);
+            System.out.println("DeliveryTime:");
+            System.out.println(deliveryAvg);
+            System.out.println(deliveryMax);
+            System.out.println(deliveryMin);
+            System.out.println(deliveryFairness);
+            /*System.out.println("Average: " + deliveryAvg);
             System.out.println("Maximal: " + deliveryMax);
             System.out.println("Minimal: " + deliveryMin);
-            System.out.println("Fairness: " + deliveryFairness);
+            System.out.println("Fairness: " + deliveryFairness);*/
             System.out.println("---");
             System.out.println("Delay:");
-            System.out.println("Average: " + delayAvg);
+            System.out.println(delayAvg);
+            System.out.println(delayMax);
+            System.out.println(delayMin);
+            System.out.println(delayFairness);
+            /*System.out.println("Average: " + delayAvg);
             System.out.println("Maximal: " + delayMax);
             System.out.println("Minimal: " + delayMin);
-            System.out.println("Fairness: " + delayFairness);
+            System.out.println("Fairness: " + delayFairness);*/
             System.out.println("---");
             System.out.println("Throughput:");
-            System.out.println("Average: " + throughputAvg);
+            System.out.println(throughputAvg);
+            System.out.println(throughputMax);
+            System.out.println(throughputMin);
+            System.out.println(throughputFairness);
+            /*System.out.println("Average: " + throughputAvg);
             System.out.println("Maximal: " + throughputMax);
             System.out.println("Minimal: " + throughputMin);
-            System.out.println("Fairness: " + throughputFairness);
+            System.out.println("Fairness: " + throughputFairness);*/
             System.out.println("###");
             System.out.println();
         }
-        return results;
     }
 }

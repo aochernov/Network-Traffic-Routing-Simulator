@@ -2,18 +2,18 @@ import jade.core.behaviours.TickerBehaviour;
 import jade.lang.acl.ACLMessage;
 
 public class SynchronizerBehaviour extends TickerBehaviour {
-    Synchronizer SyncronizerNode;
+    Synchronizer SynchronizerNode;
 
     SynchronizerBehaviour(Synchronizer agent, long period) {
         super(agent, period);
         this.setFixedPeriod(true);
-        SyncronizerNode = agent;
+        SynchronizerNode = agent;
     }
 
     @Override
     protected  void onTick() {
         if (NetworkConnection.IsFinished) {
-            SyncronizerNode.destruct();
+            SynchronizerNode.destruct();
             return;
         }
         ACLMessage message = getAgent().receive();
@@ -21,7 +21,7 @@ public class SynchronizerBehaviour extends TickerBehaviour {
             return;
         }
         if (message.getPerformative() == Synchronizer.AGENT_TO_SYNC) {
-            SyncronizerNode.addSyncAgent(Integer.parseInt(message.getSender().getLocalName()));
+            SynchronizerNode.addSyncAgent(Integer.parseInt(message.getSender().getLocalName()));
         }
     }
 }

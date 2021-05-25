@@ -1,18 +1,18 @@
-public class NetworkTask {
+public class NetworkPacket {
     int Receiver;
     int GenerationFrame;
     int Connection;
     int Priority;
     int FinishFrame;
 
-    NetworkTask(int receiver, int generationFrame, int connection, int priority) {
+    NetworkPacket(int receiver, int generationFrame, int connection, int priority) {
         Receiver = receiver;
         GenerationFrame = generationFrame;
         Connection = connection;
         Priority = priority;
     }
 
-    NetworkTask(String task) {
+    NetworkPacket(String task) {
         String[] parts = task.split("_");
         Priority = Integer.parseInt(parts[0]);
         Connection = Integer.parseInt(parts[1]);

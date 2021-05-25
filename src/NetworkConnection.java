@@ -13,10 +13,10 @@ public class NetworkConnection {
     int StartFrame;
     int FinishFrame;
     int Priority;
-    ArrayList<NetworkTask> FinishedTasks;
+    ArrayList<NetworkPacket> FinishedTasks;
     NetworkNode SenderNode;
     NetworkNode ReceiverNode;
-    Object Lock = new Object();
+    final Object Lock = new Object();
 
     NetworkConnection(NetworkController.ConnectionInfo con) {
         synchronized (Lock) {
@@ -51,17 +51,17 @@ public class NetworkConnection {
 
     void generateTasks() {
         if ((RemainingTasks > 0) && (Synchronizer.Frame >= StartFrame) && ((Synchronizer.Frame - StartFrame) % TaskArrivalRate == 0)) {
-            ArrayList<NetworkTask> newTasks = new ArrayList<>();
+            ArrayList<NetworkPacket> newTasks = new ArrayList<>();
             int numOfTasks = Math.min(RemainingTasks, TaskArrivalSize);
             for (int i = 0; i < numOfTasks; i++) {
-                newTasks.add(new NetworkTask(Receiver, Synchronizer.Frame, ID, Priority));
+                newTasks.add(new NetworkPacket(Receiver, Synchronizer.Frame, ID, Priority));
             }
-            SenderNode.getNewTasks(newTasks);
+            SenderNode.InnerQueue.addAll(newTasks);
             RemainingTasks -= numOfTasks;
         }
     }
 
-    void finishTask(NetworkTask task) {
+    void finishTask(NetworkPacket task) {
         FinishedTasks.add(task);
         if (FinishedTasks.size() == Tasks) {
             FinishFrame = Synchronizer.Frame;

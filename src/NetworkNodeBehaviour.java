@@ -13,12 +13,12 @@ public class NetworkNodeBehaviour extends TickerBehaviour {
     @Override
     protected  void onTick() {
         ACLMessage message = getAgent().receive();
-        if (message == null) {
-            return;
-        } else if (message.getPerformative() == Synchronizer.SYNC_TO_AGENT) {
-            Node.nextFrame();
-        } else {
-            Node.receiveMessage(message);
+        if (message != null) {
+            if (message.getPerformative() == Synchronizer.SYNC_TO_AGENT) {
+                Node.nextFrame();
+            } else {
+                Node.receiveMessage(message);
+            }
         }
     }
 }
